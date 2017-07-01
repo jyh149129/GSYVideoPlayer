@@ -79,7 +79,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     protected int mEnlargeImageRes = -1; //全屏显示的案件图片
 
-    private int mSystemUiVisibility;
+    protected float mSeekRatio = 1; //触摸滑动进度的比例系数
 
     protected float mSpeed = 1;//播放速度，只支持6.0以上
 
@@ -100,6 +100,12 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     protected boolean mIsTouchWigetFull = true; //是否支持全屏滑动触摸有效
 
     protected boolean mShowPauseCover = true;//是否显示暂停图片
+
+    protected boolean mRotateWithSystem = true; //旋转使能后是否跟随系统设置
+
+    protected boolean mNetChanged = false; //是否发送了网络改变
+
+    protected String mNetSate = "NORMAL";
 
     protected Context mContext;
 
@@ -140,6 +146,8 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     protected OrientationUtils mOrientationUtils; //旋转工具类
 
     private Handler mHandler = new Handler();
+
+    private int mSystemUiVisibility;
 
     /**
      * 1.5.0开始加入，如果需要不同布局区分功能，需要重载
@@ -209,6 +217,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         gsyVideoPlayer.setIfCurrentIsFullscreen(true);
         mOrientationUtils = new OrientationUtils((Activity) context, gsyVideoPlayer);
         mOrientationUtils.setEnable(mRotateViewAuto);
+        mOrientationUtils.setRotateWithSystem(mRotateWithSystem);
         gsyVideoPlayer.mOrientationUtils = mOrientationUtils;
 
         if (isShowFullAnimation()) {
@@ -250,6 +259,8 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         mCurrentState = GSYVideoManager.instance().getLastState();
         if (gsyVideoPlayer != null) {
             mCurrentState = gsyVideoPlayer.getCurrentState();
+            mNetChanged = gsyVideoPlayer.mNetChanged;
+            mNetSate = gsyVideoPlayer.mNetSate;
         }
         GSYVideoManager.instance().setListener(GSYVideoManager.instance().lastListener());
         GSYVideoManager.instance().setLastListener(null);
@@ -366,6 +377,10 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             gsyVideoPlayer.mEnlargeImageRes = mEnlargeImageRes;
             gsyVideoPlayer.mRotate = mRotate;
             gsyVideoPlayer.mShowPauseCover = mShowPauseCover;
+            gsyVideoPlayer.mSeekRatio = mSeekRatio;
+            gsyVideoPlayer.mNetChanged = mNetChanged;
+            gsyVideoPlayer.mNetSate = mNetSate;
+            gsyVideoPlayer.mRotateWithSystem = mRotateWithSystem;
             gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
@@ -399,6 +414,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     /**
      * 退出window层播放全屏效果
      */
+    @SuppressWarnings("ResourceType")
     public void clearFullscreenLayout() {
         mIfCurrentIsFullscreen = false;
         int delay = 0;
@@ -410,6 +426,16 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
                 mOrientationUtils = null;
             }
         }
+
+
+        final ViewGroup vp = getViewGroup();
+        final View oldF = vp.findViewById(FULLSCREEN_ID);
+        if (oldF != null) {
+            //此处fix bug#265，推出全屏的时候，虚拟按键问题
+            GSYVideoPlayer gsyVideoPlayer = (GSYVideoPlayer) oldF;
+            gsyVideoPlayer.mIfCurrentIsFullscreen = false;
+        }
+
         mHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -537,6 +563,8 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
             vp.addView(frameLayout, lpParent);
             gsyVideoPlayer.mHadPlay = mHadPlay;
+            gsyVideoPlayer.mNetChanged = mNetChanged;
+            gsyVideoPlayer.mNetSate = mNetSate;
             gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
@@ -573,6 +601,8 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         mCurrentState = GSYVideoManager.instance().getLastState();
         if (gsyVideoPlayer != null) {
             mCurrentState = gsyVideoPlayer.getCurrentState();
+            mNetChanged = gsyVideoPlayer.mNetChanged;
+            mNetSate = gsyVideoPlayer.mNetSate;
         }
         GSYVideoManager.instance().setListener(GSYVideoManager.instance().lastListener());
         GSYVideoManager.instance().setLastListener(null);
@@ -721,7 +751,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         this.mSpeed = speed;
         if (GSYVideoManager.instance().getMediaPlayer() != null
                 && GSYVideoManager.instance().getMediaPlayer() instanceof IjkMediaPlayer) {
-            if (speed != 1 && speed > 0) {
+            if (speed > 0) {
                 ((IjkMediaPlayer) GSYVideoManager.instance().getMediaPlayer()).setSpeed(speed);
             }
         }
@@ -822,4 +852,33 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     public void setShowPauseCover(boolean showPauseCover) {
         this.mShowPauseCover = showPauseCover;
     }
+
+    /**
+     * 调整触摸滑动快进的比例
+     * @param seekRatio 滑动快进的比例，默认1。数值越大，滑动的产生的seek越小
+     */
+    public void setSeekRatio(float seekRatio) {
+        if(seekRatio < 0) {
+            return;
+        }
+        this.mSeekRatio = seekRatio;
+    }
+
+    public float getSeekRatio() {
+        return mSeekRatio;
+    }
+
+
+    public boolean isRotateWithSystem() {
+        return mRotateWithSystem;
+    }
+
+    /**
+     * 是否更新系统旋转，false的话，系统禁止旋转也会跟着旋转
+     * @param rotateWithSystem 默认true
+     */
+    public void setRotateWithSystem(boolean rotateWithSystem) {
+        this.mRotateWithSystem = rotateWithSystem;
+    }
+
 }
